@@ -1,687 +1,276 @@
 package gui;
 
 import javax.swing.*;
-import javax.swing.border.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.geom.*;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Casino-inspired blackjack table UI. Game rules are supplied by a controller. */
 public class GameGUI extends JFrame {
-
-    // ==============================
-    // 1. 화면 크기 및 기본 설정
-    // ==============================
-    private static final int WIDTH = 1200;
-    private static final int HEIGHT = 800;
-
-    private JPanel mainPanel;
-    private JPanel dealerCardPanel;
-    private JPanel playerPanel;
-    private JPanel buttonPanel;
-
-    private JLabel dealerImageLabel;
-    private JLabel dealerScoreLabel;
-    private JLabel turnLabel;
-    private JLabel resultLabel;
-    private JLabel roundLabel;
-    private JLabel betLabel;
-
-    private JButton hitButton;
-    private JButton standButton;
-    private JButton doubleButton;
-    private JButton betPlusButton;
-    private JButton betMinusButton;
-    private JButton betConfirmButton;
-    private JButton nextRoundButton;
-    private JButton restartButton;
-
-    // ==============================
-    // 2. 게임 상태 변수
-    // ==============================
-    private int playerCount;
-    private int currentPlayerIndex = 0;
-    private int round = 1;
-    private int currentBet = 100;
-
+    private static final int W = 1280, H = 820;
+    private static final Color GOLD = new Color(225, 186, 99);
+    private static final Color CREAM = new Color(255, 244, 214);
+    private static final Color DARK = new Color(11, 18, 19);
+    private final int playerCount;
+    private int currentPlayerIndex = 0, round = 1, currentBet = 100;
     private boolean bettingFinished = false;
+    private final List<JPanel> playerCardPanels = new ArrayList<>();
+    private final List<JLabel> playerScoreLabels = new ArrayList<>();
+    private final List<JLabel> playerNameLabels = new ArrayList<>();
+    private final List<JLabel> playerBetLabels = new ArrayList<>();
+    private final List<JPanel> seatPanels = new ArrayList<>();
+    private TablePanel table;
+    private JPanel dealerCardPanel;
+    private JLabel dealerScoreLabel, turnLabel, resultLabel, roundLabel, betLabel, dealerImageLabel;
+    private JButton hitButton, standButton, doubleButton, betPlusButton, betMinusButton;
+    private JButton betConfirmButton, nextRoundButton, restartButton;
 
-    private List<JPanel> playerCardPanels;
-    private List<JLabel> playerScoreLabels;
-    private List<JLabel> playerNameLabels;
-
-    private static final Color GOLD =
-            new Color(235, 195, 90);
-    private static final Color DARK_GREEN =
-            new Color(10, 75, 48);
-
-    // ==============================
-    // 3. 생성자
-    // ==============================
     public GameGUI(int playerCount) {
-
-        this.playerCount =
-                Math.max(1, Math.min(7, playerCount));
-
-        playerCardPanels = new ArrayList<>();
-        playerScoreLabels = new ArrayList<>();
-        playerNameLabels = new ArrayList<>();
-
-        setTitle("BLACKJACK CASINO");
-        setSize(WIDTH, HEIGHT);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null);
+        this.playerCount = Math.max(1, Math.min(7, playerCount));
+        setTitle("BLACKJACK | LIVE TABLE");
+        setSize(W, H);
         setResizable(false);
-
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         initializeGUI();
-
         setVisible(true);
     }
 
-    // ==============================
-    // 4. 메인 GUI 초기화
-    // ==============================
     private void initializeGUI() {
+        table = new TablePanel();
+        table.setLayout(null);
+        setContentPane(table);
 
-        mainPanel = new BackgroundPanel(
-                "/images/backgrounds/table.png"
-        );
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        header.setBounds(36, 14, 1208, 50);
+        JLabel title = label("BLACKJACK  •  LIVE TABLE", 22, GOLD);
+        title.setHorizontalAlignment(SwingConstants.LEFT);
+        header.add(title, BorderLayout.WEST);
+        roundLabel = label("ROUND " + round, 18, CREAM);
+        header.add(roundLabel, BorderLayout.EAST);
+        table.add(header);
 
-        mainPanel.setLayout(new BorderLayout(10, 10));
-        mainPanel.setBorder(
-                BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        );
+        dealerImageLabel = new JLabel("DEALER", SwingConstants.CENTER);
+        dealerImageLabel.setForeground(CREAM);
+        dealerImageLabel.setFont(new Font("SansSerif", Font.BOLD, 20));
+        dealerImageLabel.setBounds(510, 58, 260, 205);
+        ImageIcon dealer = image("/images/dealer/dealer_idle.png", 260, 205);
+        if (dealer != null) { dealerImageLabel.setIcon(dealer); dealerImageLabel.setText(""); }
+        table.add(dealerImageLabel);
 
-        createTopPanel();
-        createDealerPanel();
-        createPlayerPanel();
-        createButtonPanel();
+        dealerScoreLabel = label("DEALER  •  ?", 17, GOLD);
+        dealerScoreLabel.setBounds(520, 261, 240, 28);
+        table.add(dealerScoreLabel);
+        dealerCardPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, -18, 0));
+        dealerCardPanel.setOpaque(false);
+        dealerCardPanel.setBounds(420, 294, 440, 112);
+        table.add(dealerCardPanel);
 
-        setContentPane(mainPanel);
-
+        createSeats();
+        turnLabel = label("현재 차례  •  PLAYER 1", 17, CREAM);
+        turnLabel.setBounds(300, 604, 680, 26);
+        table.add(turnLabel);
+        resultLabel = label("베팅 금액을 선택하고 BET 확정을 누르세요.", 15, GOLD);
+        resultLabel.setBounds(240, 635, 800, 26);
+        table.add(resultLabel);
+        createControls();
         updateTurnDisplay();
         updateBetDisplay();
         setActionButtonsEnabled(false);
     }
 
-    // ==============================
-    // 5. 상단 정보 영역
-    // ==============================
-    private void createTopPanel() {
-
-        JPanel topPanel = new JPanel(
-                new GridLayout(3, 1, 0, 5)
-        );
-        topPanel.setOpaque(false);
-
-        roundLabel = createLabel(
-                "ROUND " + round, 24, GOLD
-        );
-
-        turnLabel = createLabel(
-                "현재 차례: PLAYER 1",
-                20, Color.WHITE
-        );
-
-        resultLabel = createLabel(
-                "베팅을 진행해주세요.",
-                18, Color.WHITE
-        );
-
-        topPanel.add(roundLabel);
-        topPanel.add(turnLabel);
-        topPanel.add(resultLabel);
-
-        mainPanel.add(topPanel, BorderLayout.NORTH);
-    }
-
-    // ==============================
-    // 6. 딜러 영역
-    // ==============================
-    private void createDealerPanel() {
-
-        JPanel dealerPanel = new JPanel();
-        dealerPanel.setOpaque(false);
-        dealerPanel.setLayout(
-                new BoxLayout(dealerPanel, BoxLayout.Y_AXIS)
-        );
-
-        dealerImageLabel = new JLabel();
-        dealerImageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        ImageIcon dealerIcon = loadImage(
-                "/images/dealer/dealer_idle.png",
-                220, 180
-        );
-
-        if (dealerIcon != null) {
-            dealerImageLabel.setIcon(dealerIcon);
-        } else {
-            dealerImageLabel.setText("DEALER");
-            dealerImageLabel.setForeground(Color.WHITE);
-        }
-
-        dealerScoreLabel = createLabel(
-                "DEALER : ?", 22, GOLD
-        );
-        dealerScoreLabel.setAlignmentX(
-                Component.CENTER_ALIGNMENT
-        );
-
-        dealerCardPanel = new JPanel(new FlowLayout());
-        dealerCardPanel.setOpaque(false);
-        dealerCardPanel.setAlignmentX(
-                Component.CENTER_ALIGNMENT
-        );
-
-        dealerPanel.add(dealerImageLabel);
-        dealerPanel.add(dealerScoreLabel);
-        dealerPanel.add(dealerCardPanel);
-
-        mainPanel.add(dealerPanel, BorderLayout.CENTER);
-    }
-
-    // ==============================
-    // 7. 플레이어 영역
-    // ==============================
-    private void createPlayerPanel() {
-
-        playerPanel = new JPanel(
-                new GridLayout(1, playerCount, 8, 0)
-        );
-        playerPanel.setOpaque(false);
-
+    private void createSeats() {
+        // Seven anchors follow the lower curve of the felt table.
+        int[][] anchors = {{640, 510}, {430, 516}, {850, 516}, {265, 493},
+                           {1015, 493}, {120, 455}, {1160, 455}};
+        int[][] order = {{0}, {1,2}, {1,0,2}, {3,1,2,4},
+                         {3,1,0,2,4}, {5,3,1,2,4,6}, {5,3,1,0,2,4,6}};
         for (int i = 0; i < playerCount; i++) {
-
-            JPanel playerBox = new JPanel();
-            playerBox.setOpaque(false);
-            playerBox.setLayout(
-                    new BoxLayout(
-                            playerBox,
-                            BoxLayout.Y_AXIS
-                    )
-            );
-
-            JLabel nameLabel = createLabel(
-                    "PLAYER " + (i + 1),
-                    17,
-                    Color.WHITE
-            );
-
-            JLabel scoreLabel = createLabel(
-                    "SCORE : 0",
-                    15,
-                    GOLD
-            );
-
-            JPanel cardPanel = new JPanel(
-                    new FlowLayout(FlowLayout.CENTER, 2, 2)
-            );
-            cardPanel.setOpaque(false);
-            cardPanel.setPreferredSize(
-                    new Dimension(140, 105)
-            );
-
-            nameLabel.setAlignmentX(
-                    Component.CENTER_ALIGNMENT
-            );
-            scoreLabel.setAlignmentX(
-                    Component.CENTER_ALIGNMENT
-            );
-
-            playerBox.add(nameLabel);
-            playerBox.add(scoreLabel);
-            playerBox.add(cardPanel);
-
-            playerNameLabels.add(nameLabel);
-            playerScoreLabels.add(scoreLabel);
-            playerCardPanels.add(cardPanel);
-
-            playerPanel.add(playerBox);
+            int[] xy = anchors[order[playerCount - 1][i]];
+            JPanel seat = new JPanel();
+            seat.setLayout(new BoxLayout(seat, BoxLayout.Y_AXIS));
+            seat.setOpaque(false);
+            seat.setBounds(xy[0] - 83, xy[1] - 42, 166, 126);
+            JLabel name = label("PLAYER " + (i + 1), 14, CREAM);
+            name.setAlignmentX(Component.CENTER_ALIGNMENT);
+            JLabel score = label("SCORE  0", 12, GOLD);
+            score.setAlignmentX(Component.CENTER_ALIGNMENT);
+            JPanel cards = new JPanel(new FlowLayout(FlowLayout.CENTER, -26, 0));
+            cards.setOpaque(false);
+            cards.setPreferredSize(new Dimension(166, 68));
+            cards.setMaximumSize(new Dimension(166, 68));
+            JLabel bet = label("BET  $0", 12, CREAM);
+            bet.setAlignmentX(Component.CENTER_ALIGNMENT);
+            seat.add(name); seat.add(score); seat.add(cards); seat.add(bet);
+            table.add(seat);
+            seatPanels.add(seat);
+            playerNameLabels.add(name);
+            playerScoreLabels.add(score);
+            playerCardPanels.add(cards);
+            playerBetLabels.add(bet);
         }
-
-        JPanel bottomContainer = new JPanel(
-                new BorderLayout(0, 15)
-        );
-        bottomContainer.setOpaque(false);
-
-        bottomContainer.add(
-                playerPanel, BorderLayout.CENTER
-        );
-
-        createButtonPanel();
-
-        bottomContainer.add(
-                buttonPanel, BorderLayout.SOUTH
-        );
-
-        mainPanel.add(
-                bottomContainer, BorderLayout.SOUTH
-        );
     }
 
-    // ==============================
-    // 8. 버튼 영역
-    // ==============================
-    private void createButtonPanel() {
-
-        buttonPanel = new JPanel();
-        buttonPanel.setOpaque(false);
-        buttonPanel.setLayout(
-                new FlowLayout(FlowLayout.CENTER, 8, 5)
-        );
-
-        hitButton = createButton("HIT");
-        standButton = createButton("STAND");
-        doubleButton = createButton("DOUBLE");
-
-        betPlusButton = createButton("BET +");
-        betMinusButton = createButton("BET -");
-        betConfirmButton = createButton("BET 확정");
-
-        nextRoundButton = createButton("다음 라운드");
-        restartButton = createButton("재시작");
-
-        betLabel = createLabel(
-                "BET : $100", 16, GOLD
-        );
-
-        buttonPanel.add(hitButton);
-        buttonPanel.add(standButton);
-        buttonPanel.add(doubleButton);
-
-        buttonPanel.add(betMinusButton);
-        buttonPanel.add(betLabel);
-        buttonPanel.add(betPlusButton);
-        buttonPanel.add(betConfirmButton);
-
-        buttonPanel.add(nextRoundButton);
-        buttonPanel.add(restartButton);
-
-        registerButtonEvents();
-    }
-
-    // ==============================
-    // 9. 버튼 이벤트 연결
-    // ==============================
-    private void registerButtonEvents() {
-
-        hitButton.addActionListener(e -> {
-            resultLabel.setText("HIT 선택");
-            // TODO: GameController.hit() 연결
-        });
-
-        standButton.addActionListener(e -> {
-            resultLabel.setText("STAND 선택");
-            // TODO: GameController.stand() 연결
-        });
-
-        doubleButton.addActionListener(e -> {
-            resultLabel.setText("DOUBLE 선택");
-            // TODO: GameController.doubleDown() 연결
-        });
-
-        betPlusButton.addActionListener(e -> {
-            currentBet += 50;
-            updateBetDisplay();
-        });
-
-        betMinusButton.addActionListener(e -> {
-            currentBet = Math.max(50, currentBet - 50);
-            updateBetDisplay();
-        });
-
+    private void createControls() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 13));
+        bar.setBackground(new Color(9, 18, 18));
+        bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, GOLD));
+        bar.setBounds(0, 679, W, 103);
+        table.add(bar);
+        hitButton = button("HIT", new Color(32, 112, 84));
+        standButton = button("STAND", new Color(145, 59, 58));
+        doubleButton = button("DOUBLE", new Color(61, 87, 139));
+        betMinusButton = button("− 50", new Color(65, 64, 54));
+        betPlusButton = button("+ 50", new Color(65, 64, 54));
+        betConfirmButton = button("BET 확정", new Color(145, 110, 47));
+        nextRoundButton = button("다음 라운드", new Color(91, 72, 43));
+        restartButton = button("재시작", new Color(55, 59, 63));
+        betLabel = label("BET $100", 15, GOLD);
+        betLabel.setPreferredSize(new Dimension(106, 45));
+        for (JComponent c : new JComponent[]{hitButton, standButton, doubleButton,
+                betMinusButton, betLabel, betPlusButton, betConfirmButton,
+                nextRoundButton, restartButton}) bar.add(c);
+        nextRoundButton.setEnabled(false);
+        hitButton.addActionListener(e -> showResult("HIT 선택 — 게임 컨트롤러 연결 필요"));
+        standButton.addActionListener(e -> showResult("STAND 선택 — 게임 컨트롤러 연결 필요"));
+        doubleButton.addActionListener(e -> showResult("DOUBLE 선택 — 게임 컨트롤러 연결 필요"));
+        betPlusButton.addActionListener(e -> { currentBet += 50; updateBetDisplay(); });
+        betMinusButton.addActionListener(e -> { currentBet = Math.max(50, currentBet - 50); updateBetDisplay(); });
         betConfirmButton.addActionListener(e -> {
             bettingFinished = true;
-
-            resultLabel.setText(
-                    "베팅 확정 : $" + currentBet
-            );
-
+            playerBetLabels.get(currentPlayerIndex).setText("BET  $" + currentBet);
+            showResult("베팅 확정  •  $" + currentBet);
             setActionButtonsEnabled(true);
-
             betPlusButton.setEnabled(false);
             betMinusButton.setEnabled(false);
             betConfirmButton.setEnabled(false);
-
-            // TODO: GameController.startRound() 연결
         });
-
-        nextRoundButton.addActionListener(e -> {
-            startNextRound();
-        });
-
+        nextRoundButton.addActionListener(e -> startNextRound());
         restartButton.addActionListener(e -> {
-            int choice = JOptionPane.showConfirmDialog(
-                    this,
-                    "게임을 재시작하시겠습니까?",
-                    "게임 재시작",
-                    JOptionPane.YES_NO_OPTION
-            );
-
-            if (choice == JOptionPane.YES_OPTION) {
-                dispose();
-                new GameGUI(playerCount);
+            if (JOptionPane.showConfirmDialog(this, "게임을 재시작하시겠습니까?",
+                    "재시작", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                dispose(); new GameGUI(playerCount);
             }
         });
-
-        nextRoundButton.setEnabled(false);
     }
 
-    // ==============================
-    // 10. 카드 표시
-    // ==============================
+    private JLabel label(String text, int size, Color color) {
+        JLabel l = new JLabel(text, SwingConstants.CENTER);
+        l.setFont(new Font("SansSerif", Font.BOLD, size));
+        l.setForeground(color);
+        return l;
+    }
+    private JButton button(String text, Color background) {
+        JButton b = new JButton(text);
+        b.setFont(new Font("SansSerif", Font.BOLD, 12));
+        b.setBackground(background);
+        b.setForeground(Color.WHITE);
+        b.setFocusPainted(false);
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(213, 184, 119), 1),
+                new EmptyBorder(9, 9, 9, 9)));
+        b.setPreferredSize(new Dimension(text.equals("다음 라운드") ? 110 : 94, 43));
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
+    }
+    private ImageIcon image(String path, int w, int h) {
+        URL url = getClass().getResource(path);
+        if (url == null) return null;
+        return new ImageIcon(new ImageIcon(url).getImage().getScaledInstance(w, h, Image.SCALE_SMOOTH));
+    }
+    private JLabel card(String imageName) {
+        JLabel l = label(imageName, 10, DARK);
+        ImageIcon icon = image("/images/cards/" + imageName, 47, 66);
+        if (icon != null) { l.setIcon(icon); l.setText(""); }
+        else { l.setOpaque(true); l.setBackground(CREAM); l.setPreferredSize(new Dimension(47, 66)); }
+        return l;
+    }
     public void addDealerCard(String imageName) {
-
-        JLabel cardLabel = createCardLabel(imageName);
-
-        dealerCardPanel.add(cardLabel);
-        dealerCardPanel.revalidate();
-        dealerCardPanel.repaint();
+        dealerCardPanel.add(card(imageName));
+        dealerCardPanel.revalidate(); dealerCardPanel.repaint();
     }
-
-    public void addPlayerCard(
-            int playerIndex,
-            String imageName
-    ) {
-
-        if (!isValidPlayerIndex(playerIndex)) {
-            return;
-        }
-
-        JLabel cardLabel = createCardLabel(imageName);
-
-        JPanel cardPanel =
-                playerCardPanels.get(playerIndex);
-
-        cardPanel.add(cardLabel);
-        cardPanel.revalidate();
-        cardPanel.repaint();
+    public void addPlayerCard(int playerIndex, String imageName) {
+        if (!valid(playerIndex)) return;
+        JPanel p = playerCardPanels.get(playerIndex);
+        p.add(card(imageName)); p.revalidate(); p.repaint();
     }
-
-    private JLabel createCardLabel(String imageName) {
-
-        JLabel label = new JLabel();
-
-        ImageIcon icon = loadImage(
-                "/images/cards/" + imageName,
-                65, 95
-        );
-
-        if (icon != null) {
-            label.setIcon(icon);
-        } else {
-            label.setText(imageName);
-            label.setForeground(Color.WHITE);
-        }
-
-        return label;
+    public void updateDealerScore(int score) { dealerScoreLabel.setText("DEALER  •  " + score); }
+    public void hideDealerScore() { dealerScoreLabel.setText("DEALER  •  ?"); }
+    public void updatePlayerScore(int playerIndex, int score) {
+        if (valid(playerIndex)) playerScoreLabels.get(playerIndex).setText("SCORE  " + score);
     }
-
-    // ==============================
-    // 11. 점수 표시
-    // ==============================
-    public void updateDealerScore(int score) {
-        dealerScoreLabel.setText(
-                "DEALER : " + score
-        );
-    }
-
-    public void hideDealerScore() {
-        dealerScoreLabel.setText("DEALER : ?");
-    }
-
-    public void updatePlayerScore(
-            int playerIndex,
-            int score
-    ) {
-
-        if (!isValidPlayerIndex(playerIndex)) {
-            return;
-        }
-
-        playerScoreLabels.get(playerIndex).setText(
-                "SCORE : " + score
-        );
-    }
-
-    // ==============================
-    // 12. 현재 플레이어 표시
-    // ==============================
     public void setCurrentPlayer(int playerIndex) {
-
-        if (!isValidPlayerIndex(playerIndex)) {
-            return;
-        }
-
-        currentPlayerIndex = playerIndex;
-        updateTurnDisplay();
+        if (valid(playerIndex)) { currentPlayerIndex = playerIndex; updateTurnDisplay(); }
     }
-
     private void updateTurnDisplay() {
-
-        turnLabel.setText(
-                "현재 차례 : PLAYER "
-                + (currentPlayerIndex + 1)
-        );
-
+        turnLabel.setText("현재 차례  •  PLAYER " + (currentPlayerIndex + 1));
         for (int i = 0; i < playerCount; i++) {
-
-            if (i == currentPlayerIndex) {
-                playerNameLabels.get(i).setForeground(
-                        Color.YELLOW
-                );
-            } else {
-                playerNameLabels.get(i).setForeground(
-                        Color.WHITE
-                );
-            }
+            playerNameLabels.get(i).setForeground(i == currentPlayerIndex ? GOLD : CREAM);
+            playerNameLabels.get(i).setText((i == currentPlayerIndex ? "◆ " : "") + "PLAYER " + (i + 1));
         }
     }
-
-    // ==============================
-    // 13. 승패 결과 표시
-    // ==============================
-    public void showResult(String message) {
-        resultLabel.setText(message);
-    }
-
+    public void showResult(String message) { resultLabel.setText(message); }
     public void finishRound(String message) {
-
-        showResult(message);
-
-        setActionButtonsEnabled(false);
-        nextRoundButton.setEnabled(true);
+        showResult(message); setActionButtonsEnabled(false); nextRoundButton.setEnabled(true);
     }
-
-    // ==============================
-    // 14. 다음 라운드
-    // ==============================
     private void startNextRound() {
-
-        round++;
-        currentPlayerIndex = 0;
-        bettingFinished = false;
-        currentBet = 100;
-
-        dealerCardPanel.removeAll();
-
-        for (JPanel panel : playerCardPanels) {
-            panel.removeAll();
-            panel.revalidate();
-            panel.repaint();
-        }
-
-        for (JLabel scoreLabel : playerScoreLabels) {
-            scoreLabel.setText("SCORE : 0");
-        }
-
-        hideDealerScore();
-
+        round++; currentPlayerIndex = 0; currentBet = 100; bettingFinished = false;
         roundLabel.setText("ROUND " + round);
-        resultLabel.setText("베팅을 진행해주세요.");
-
-        updateTurnDisplay();
-        updateBetDisplay();
-
+        dealerCardPanel.removeAll(); dealerCardPanel.revalidate(); dealerCardPanel.repaint();
+        for (int i = 0; i < playerCount; i++) {
+            JPanel p = playerCardPanels.get(i);
+            p.removeAll(); p.revalidate(); p.repaint();
+            playerScoreLabels.get(i).setText("SCORE  0");
+            playerBetLabels.get(i).setText("BET  $0");
+        }
+        hideDealerScore(); updateTurnDisplay(); updateBetDisplay();
+        showResult("베팅 금액을 선택하고 BET 확정을 누르세요.");
         setActionButtonsEnabled(false);
-
-        betPlusButton.setEnabled(true);
-        betMinusButton.setEnabled(true);
-        betConfirmButton.setEnabled(true);
-        nextRoundButton.setEnabled(false);
-
-        dealerCardPanel.revalidate();
-        dealerCardPanel.repaint();
+        betPlusButton.setEnabled(true); betMinusButton.setEnabled(true);
+        betConfirmButton.setEnabled(true); nextRoundButton.setEnabled(false);
     }
-
-    // ==============================
-    // 15. 버튼 상태 변경
-    // ==============================
-    public void setActionButtonsEnabled(
-            boolean enabled
-    ) {
-        hitButton.setEnabled(enabled);
-        standButton.setEnabled(enabled);
-        doubleButton.setEnabled(enabled);
+    public void setActionButtonsEnabled(boolean enabled) {
+        hitButton.setEnabled(enabled); standButton.setEnabled(enabled); doubleButton.setEnabled(enabled);
     }
+    private void updateBetDisplay() { betLabel.setText("BET $" + currentBet); }
+    private boolean valid(int i) { return i >= 0 && i < playerCount; }
 
-    private void updateBetDisplay() {
-        betLabel.setText(
-                "BET : $" + currentBet
-        );
-    }
-
-    private boolean isValidPlayerIndex(int index) {
-        return index >= 0 && index < playerCount;
-    }
-
-    // ==============================
-    // 16. 공통 JLabel 생성
-    // ==============================
-    private JLabel createLabel(
-            String text,
-            int fontSize,
-            Color color
-    ) {
-
-        JLabel label = new JLabel(
-                text, SwingConstants.CENTER
-        );
-
-        label.setFont(
-                new Font(
-                        "SansSerif",
-                        Font.BOLD,
-                        fontSize
-                )
-        );
-
-        label.setForeground(color);
-
-        return label;
-    }
-
-    // ==============================
-    // 17. 공통 JButton 생성
-    // ==============================
-    private JButton createButton(String text) {
-
-        JButton button = new JButton(text);
-
-        button.setFont(
-                new Font("SansSerif", Font.BOLD, 13)
-        );
-
-        button.setBackground(DARK_GREEN);
-        button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
-        button.setPreferredSize(
-                new Dimension(105, 38)
-        );
-
-        return button;
-    }
-
-    // ==============================
-    // 18. 이미지 불러오기
-    // ==============================
-    private ImageIcon loadImage(
-            String path,
-            int width,
-            int height
-    ) {
-
-        java.net.URL url =
-                getClass().getResource(path);
-
-        if (url == null) {
-            System.out.println(
-                    "이미지를 찾을 수 없습니다: " + path
-            );
-            return null;
+    private static class TablePanel extends JPanel {
+        private Image background;
+        TablePanel() {
+            setBackground(DARK);
+            URL url = GameGUI.class.getResource("/backgrounds/blackjack_table.png");
+            if (url == null) url = GameGUI.class.getResource("/resource/backgrounds/blackjack_table.png");
+            if (url != null) background = new ImageIcon(url).getImage();
         }
-
-        ImageIcon original = new ImageIcon(url);
-
-        Image scaled = original.getImage()
-                .getScaledInstance(
-                        width,
-                        height,
-                        Image.SCALE_SMOOTH
-                );
-
-        return new ImageIcon(scaled);
-    }
-
-    // ==============================
-    // 19. 배경 이미지 JPanel
-    // ==============================
-    private class BackgroundPanel extends JPanel {
-
-        private Image backgroundImage;
-
-        public BackgroundPanel(String path) {
-
-            java.net.URL url =
-                    getClass().getResource(path);
-
-            if (url != null) {
-                backgroundImage =
-                        new ImageIcon(url).getImage();
+        @Override protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setPaint(new GradientPaint(0, 0, new Color(26, 35, 34), 0, H, DARK));
+            g.fillRect(0, 0, getWidth(), getHeight());
+            if (background != null) {
+                // Use the supplied table artwork at full opacity, not as a translucent overlay.
+                g.drawImage(background, 0, 0, getWidth(), getHeight(), this);
+                g.dispose();
+                return;
             }
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-
-            if (backgroundImage != null) {
-                g.drawImage(
-                        backgroundImage,
-                        0, 0,
-                        getWidth(),
-                        getHeight(),
-                        this
-                );
-            } else {
-                g.setColor(DARK_GREEN);
-                g.fillRect(
-                        0, 0,
-                        getWidth(),
-                        getHeight()
-                );
-            }
+            // Fallback table drawing when the PNG is unavailable.
+            Shape rim = new RoundRectangle2D.Double(32, 155, 1216, 510, 290, 290);
+            g.setColor(new Color(7, 10, 11)); g.setStroke(new BasicStroke(16)); g.draw(rim);
+            g.setPaint(new GradientPaint(0, 170, new Color(16, 102, 74), 0, 650, new Color(5, 55, 43)));
+            g.fill(rim);
+            g.setColor(new Color(208, 171, 91)); g.setStroke(new BasicStroke(4)); g.draw(rim);
+            g.setColor(new Color(240, 213, 150, 85)); g.setStroke(new BasicStroke(2));
+            g.draw(new Arc2D.Double(102, 240, 1076, 575, 0, 180, Arc2D.OPEN));
+            g.dispose();
         }
     }
-
-    // ==============================
-    // 20. 단독 실행 테스트
-    // ==============================
     public static void main(String[] args) {
-
-        SwingUtilities.invokeLater(() -> {
-            new GameGUI(3);
-        });
+        SwingUtilities.invokeLater(() -> new GameGUI(7));
     }
 }
