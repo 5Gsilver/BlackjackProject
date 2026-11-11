@@ -6,6 +6,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.util.ArrayList;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -97,12 +98,50 @@ public class WarningScreen extends JFrame {
 		add(buttonPanel, BorderLayout.SOUTH);
 }
 	
-	private void startGame() {
-		dispose();
 
-		 new SetupScreen();
-		
-	}
+private void startGame() {
+
+    // 1. 경고문 확인 여부 검사
+    if (!agreeCheckBox.isSelected()) {
+
+        JOptionPane.showMessageDialog(
+                this,
+                "경고 내용을 확인해주세요."
+        );
+
+        return;
+    }
+
+    // 2. 게임 설정 화면 생성
+    SetupScreen setupScreen = new SetupScreen();
+
+    // 3. 게임 시작 이벤트 연결
+    setupScreen.setStartGameListener(
+        new SetupScreen.StartGameListener() {
+
+            @Override
+            public void onStartGame(
+                ArrayList<SetupScreen.PlayerSetting> settings) {
+                // 플레이어 설정 정보 출력
+                for (int i = 0; i < settings.size(); i++) {
+                    System.out.println(
+                        settings.get(i).getName() + " : "
+                        + settings.get(i).getInitialChips()
+                    );
+                }
+
+                // TODO: BlackjackGame 및 GameGUI 연결
+            }
+        }
+    );
+
+    // 4. 게임 설정 화면 표시
+    setupScreen.setVisible(true);
+
+    // 5. 기존 경고 화면 종료
+    dispose();
+}
+
 
 	public static void main(String[] args) {
 		SwingUtilities.invokeLater(() -> {
