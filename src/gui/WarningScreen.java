@@ -122,7 +122,7 @@ private void startGame() {
             @Override
             public void onStartGame(
                 ArrayList<SetupScreen.PlayerSetting> settings) {
-                // 플레이어 설정 정보 출력
+				// 설정된 플레이어 정보 출력
                 for (int i = 0; i < settings.size(); i++) {
                     System.out.println(
                         settings.get(i).getName() + " : "
