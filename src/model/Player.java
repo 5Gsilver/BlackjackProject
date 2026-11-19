@@ -42,6 +42,10 @@ public class Player {
     }
 
     // 딜러 등 칩이 필요 없는 객체를 위한 생성자
+    public void resetHand() {
+        hand.clear();
+    }
+    
     public Player(String name) {
         this(name, 0);
     }

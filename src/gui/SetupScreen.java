@@ -112,7 +112,8 @@ public final class SetupScreen extends JFrame {
         titleLabel.setAlignmentX(CENTER_ALIGNMENT);
         topPanel.add(titleLabel);
 
-        JLabel infoLabel = new JLabel();
+        JLabel infoLabel = new JLabel(
+                "실제 금전 거래가 없는 교육용 게임입니다.");
         infoLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
         infoLabel.setForeground(WHITE);
         infoLabel.setAlignmentX(CENTER_ALIGNMENT);

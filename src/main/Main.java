@@ -15,7 +15,6 @@ public class Main {
                 WarningScreen warningScreen = new WarningScreen();
 
                 warningScreen.setVisible(true);
-
             }
         });
     }

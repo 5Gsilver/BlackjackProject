@@ -1,7 +1,8 @@
+
 package game;
 
 import java.util.ArrayList;
-
+import model.Card;
 import model.Dealer;
 import model.Deck;
 import model.Player;
@@ -9,91 +10,110 @@ import model.Player;
 public class BlackjackGame {
 
     public enum GameState {
-        WAITING,
-        BETTING,
-        DEALING,
-        PLAYER_TURN,
-        DEALER_TURN,
-        ROUND_END,
-        GAME_OVER
+        WAITING, BETTING, DEALING, PLAYER_TURN,
+        DEALER_TURN, ROUND_END, GAME_OVER
     }
 
     public enum PlayerState {
-        PLAYING,
-        STAND,
-        BUST,
-        BLACKJACK,
-        DOUBLE_DOWN
+        PLAYING, STAND, BUST, BLACKJACK, DOUBLE_DOWN
     }
 
-    private ArrayList<Player> players;
-    private Dealer dealer;
-    private Deck deck;
+    private final ArrayList<Player> players;
+    private final Dealer dealer;
+    private final Deck deck;
+    private final ArrayList<PlayerState> playerStates;
 
-    private GameState gameState;
+    private GameState gameState = GameState.WAITING;
     private int currentPlayerIndex;
-
-    private ArrayList<PlayerState> playerStates;
+    private int round = 1;
 
     public BlackjackGame(
             ArrayList<Player> players,
             Dealer dealer,
             Deck deck) {
 
-        if (players == null || dealer == null || deck == null) {
+        if (players == null || players.isEmpty()
+                || players.size() > 7
+                || dealer == null || deck == null) {
+
             throw new IllegalArgumentException(
-                    "게임 객체가 올바르게 전달되지 않았습니다."
-            );
+                    "플레이어(1~7명), 딜러, 덱을 확인하세요.");
         }
 
-        if (players.isEmpty() || players.size() > 7) {
-            throw new IllegalArgumentException(
-                    "플레이어는 1명 이상 7명 이하여야 합니다."
-            );
-        }
-
-        this.players = new ArrayList<>(players);
+        this.players = new ArrayList<Player>(players);
         this.dealer = dealer;
         this.deck = deck;
 
-        this.gameState = GameState.WAITING;
-        this.currentPlayerIndex = 0;
+        playerStates = new ArrayList<PlayerState>();
 
-        this.playerStates = new ArrayList<>();
+        for (Player player : players) {
 
-        for (int i = 0; i < players.size(); i++) {
+            if (player == null) {
+                throw new IllegalArgumentException(
+                        "플레이어가 null입니다.");
+            }
+
             playerStates.add(PlayerState.PLAYING);
         }
     }
 
+    public boolean placeBet(int playerIndex, int amount) {
+
+        if ((gameState != GameState.WAITING
+                && gameState != GameState.BETTING)
+                || playerIndex < 0
+                || playerIndex >= players.size()) {
+            return false;
+        }
+
+        return players.get(playerIndex).placeBet(amount);
+    }
+
     public void startGame() {
 
-        if (gameState != GameState.WAITING) {
+        if (gameState != GameState.WAITING
+                && gameState != GameState.BETTING) {
             return;
         }
 
-        gameState = GameState.BETTING;
+        for (Player player : players) {
 
+            if (player.getChips() + player.getCurrentBet() > 0
+                    && player.getCurrentBet() == 0) {
+
+                throw new IllegalStateException(
+                        "모든 참가자의 베팅을 확정해야 합니다.");
+            }
+        }
+
+        gameState = GameState.BETTING;
         startRound();
     }
 
     public void startRound() {
 
-        if (gameState != GameState.BETTING
-                && gameState != GameState.ROUND_END) {
+        if (gameState != GameState.BETTING) {
             return;
         }
 
+        if (deck.needsShuffle()
+                || deck.getRemainingCards() < 30) {
+            deck.reset();
+        }
+
+        dealer.resetDealer();
         currentPlayerIndex = 0;
 
-        playerStates.clear();
+        for (int i = 0; i < players.size(); i++) {
 
-        for (Player player : players) {
-            playerStates.add(PlayerState.PLAYING);
+            if (players.get(i).getCurrentBet() > 0) {
+                playerStates.set(i, PlayerState.PLAYING);
+            } else {
+                playerStates.set(i, PlayerState.STAND);
+            }
         }
 
         gameState = GameState.DEALING;
-
         dealInitialCards();
     }
 
@@ -103,81 +123,118 @@ public class BlackjackGame {
             return;
         }
 
+        for (int pass = 0; pass < 2; pass++) {
+
+            for (int i = 0; i < players.size(); i++) {
+
+                if (players.get(i).getCurrentBet() > 0) {
+                    players.get(i).addCard(deck.drawCard());
+                }
+            }
+
+            dealer.addCard(deck.drawCard());
+        }
+
         for (int i = 0; i < players.size(); i++) {
 
-            Player player = players.get(i);
+            if (players.get(i).getCurrentBet() > 0
+                    && players.get(i).isBlackjack()) {
 
+                playerStates.set(i, PlayerState.BLACKJACK);
+            }
         }
 
         gameState = GameState.PLAYER_TURN;
 
-        nextTurn();
+        if (dealer.isBlackjack()) {
+            dealer.revealHiddenCard();
+            finishRound();
+        } else {
+            nextTurn();
+        }
+    }
+
+    private boolean canPlay() {
+
+        return gameState == GameState.PLAYER_TURN
+                && currentPlayerIndex >= 0
+                && currentPlayerIndex < players.size()
+                && playerStates.get(currentPlayerIndex)
+                        == PlayerState.PLAYING;
     }
 
     public void hit() {
 
-        if (gameState != GameState.PLAYER_TURN) {
-            return;
-        }
-
-        if (currentPlayerIndex >= players.size()) {
-            return;
-        }
-
-        PlayerState state = playerStates.get(currentPlayerIndex);
-
-        if (state != PlayerState.PLAYING) {
+        if (!canPlay()) {
             return;
         }
 
         Player player = players.get(currentPlayerIndex);
 
-    }
-
-    public void stand() {
-
-        if (gameState != GameState.PLAYER_TURN) {
+        if (!player.hit(deck.drawCard())) {
             return;
         }
 
-        if (currentPlayerIndex >= players.size()) {
-            return;
+        if (player.isBust()) {
+
+            playerStates.set(
+                    currentPlayerIndex,
+                    PlayerState.BUST);
+
+        } else if (player.getScore() == 21) {
+
+            playerStates.set(
+                    currentPlayerIndex,
+                    PlayerState.STAND);
         }
 
         if (playerStates.get(currentPlayerIndex)
                 != PlayerState.PLAYING) {
+            nextTurn();
+        }
+    }
+
+    public void stand() {
+
+        if (!canPlay()) {
             return;
         }
 
+        players.get(currentPlayerIndex).stand();
+
         playerStates.set(
                 currentPlayerIndex,
-                PlayerState.STAND
-        );
+                PlayerState.STAND);
 
         nextTurn();
     }
 
     public void doubleDown() {
 
-        if (gameState != GameState.PLAYER_TURN) {
-            return;
-        }
-
-        if (currentPlayerIndex >= players.size()) {
-            return;
-        }
-
-        if (playerStates.get(currentPlayerIndex)
-                != PlayerState.PLAYING) {
+        if (!canPlay()) {
             return;
         }
 
         Player player = players.get(currentPlayerIndex);
 
-        playerStates.set(
-                currentPlayerIndex,
-                PlayerState.DOUBLE_DOWN
-        );
+        if (!player.canDouble()) {
+            return;
+        }
+
+        player.doubleDown(deck.drawCard());
+
+        if (player.isBust()) {
+
+            playerStates.set(
+                    currentPlayerIndex,
+                    PlayerState.BUST);
+
+        } else {
+
+            playerStates.set(
+                    currentPlayerIndex,
+                    PlayerState.DOUBLE_DOWN);
+        }
 
         nextTurn();
     }
@@ -188,18 +245,16 @@ public class BlackjackGame {
             return;
         }
 
-        while (currentPlayerIndex < players.size()) {
-
-            if (playerStates.get(currentPlayerIndex)
-                    == PlayerState.PLAYING) {
-
-                return;
-            }
+        while (currentPlayerIndex < players.size()
+                && playerStates.get(currentPlayerIndex)
+                        != PlayerState.PLAYING) {
 
             currentPlayerIndex++;
         }
 
-        dealerTurn();
+        if (currentPlayerIndex == players.size()) {
+            dealerTurn();
+        }
     }
 
     public void dealerTurn() {
@@ -210,18 +265,21 @@ public class BlackjackGame {
 
         gameState = GameState.DEALER_TURN;
 
-        boolean hasActivePlayer = false;
+        dealer.revealHiddenCard();
 
-        for (PlayerState state : playerStates) {
+        boolean active = false;
 
-            if (state != PlayerState.BUST) {
-                hasActivePlayer = true;
-                break;
+        for (int i = 0; i < players.size(); i++) {
+
+            if (players.get(i).getCurrentBet() > 0
+                    && !players.get(i).isBust()) {
+
+                active = true;
             }
         }
 
-        if (hasActivePlayer) {
-
+        if (active) {
+            dealer.playTurn(deck);
         }
 
         finishRound();
@@ -229,8 +287,40 @@ public class BlackjackGame {
 
     public void finishRound() {
 
-        if (gameState != GameState.DEALER_TURN) {
+        if (gameState != GameState.DEALER_TURN
+                && gameState != GameState.PLAYER_TURN) {
             return;
+        }
+
+        dealer.revealHiddenCard();
+
+        for (Player player : players) {
+
+            if (player.getCurrentBet() == 0) {
+                continue;
+            }
+
+            GameRules.Result result =
+                    GameRules.compareHands(
+                            player.getHand(),
+                            dealer.getHand());
+
+            if (result == GameRules.Result.PUSH) {
+
+                player.pushBet();
+
+            } else if (result == GameRules.Result.LOSE) {
+
+                player.loseBet();
+
+            } else if (player.isBlackjack()) {
+
+                player.blackjackWin();
+
+            } else {
+
+                player.winBet();
+            }
         }
 
         gameState = GameState.ROUND_END;
@@ -242,31 +332,41 @@ public class BlackjackGame {
             return;
         }
 
-        boolean hasPlayer = false;
+        boolean canContinue = false;
 
         for (Player player : players) {
 
-            hasPlayer = true;
+            if (player.getChips() > 0) {
+                canContinue = true;
+            }
 
+            player.resetRound();
         }
 
-        if (!hasPlayer) {
+        dealer.resetDealer();
+        round++;
+
+        if (canContinue) {
+            gameState = GameState.BETTING;
+        } else {
             gameState = GameState.GAME_OVER;
-            return;
         }
-
-        gameState = GameState.BETTING;
-
-        startRound();
     }
 
     public void endGame() {
-
         gameState = GameState.GAME_OVER;
     }
 
     public GameState getGameState() {
         return gameState;
+    }
+
+    public int getRound() {
+        return round;
+    }
+
+    public int getCurrentPlayerIndex() {
+        return currentPlayerIndex;
     }
 
     public Player getCurrentPlayer() {
@@ -279,10 +379,34 @@ public class BlackjackGame {
     }
 
     public ArrayList<Player> getPlayers() {
-        return new ArrayList<>(players);
+        return new ArrayList<Player>(players);
     }
 
     public Dealer getDealer() {
         return dealer;
+    }
+
+    public ArrayList<Card> getPlayerHand(int index) {
+        return players.get(index).getHand();
+    }
+
+    public ArrayList<Card> getDealerHand() {
+        return dealer.getHand();
+    }
+
+    public int getPlayerScore(int index) {
+        return players.get(index).getScore();
+    }
+
+    public int getDealerScore() {
+        return dealer.getScore();
+    }
+
+    public PlayerState getPlayerState(int index) {
+        return playerStates.get(index);
+    }
+
+    public int getBet(int index) {
+        return players.get(index).getCurrentBet();
     }
 }
